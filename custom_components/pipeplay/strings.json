@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "PipePlay PipeWire Media Player",
+        "description": "Configure your PipePlay media player connection",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "name": "Name"
+        }
+      },
+      "discovery_confirm": {
+        "title": "PipePlay Player Found",
+        "description": "A PipePlay player was discovered on your network:\n\n**Name:** {name}\n**Host:** {host}\n**Port:** {port}\n\nDo you want to add this device?"
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to PipePlay service",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This PipePlay instance is already configured",
+      "cannot_connect": "Cannot connect to the PipePlay service"
+    }
+  }
+}

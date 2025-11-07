@@ -1,0 +1,15 @@
+{
+  "domain": "pipeplay",
+  "name": "PipePlay PipeWire Media Player",
+  "version": "1.0.0",
+  "documentation": "https://github.com/coagentpai/pipeplay-ha",
+  "issue_tracker": "https://github.com/coagentpai/pipeplay-ha/issues",
+  "requirements": [],
+  "codeowners": ["@coagentpai"],
+  "config_flow": true,
+  "dependencies": ["zeroconf"],
+  "after_dependencies": [],
+  "iot_class": "local_polling",
+  "quality_scale": "silver",
+  "zeroconf": ["_pipeplay._tcp.local."]
+}

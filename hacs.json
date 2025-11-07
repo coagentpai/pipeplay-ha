@@ -1,0 +1,8 @@
+{
+  "name": "PipePlay",
+  "content_in_root": false,
+  "filename": "pipeplay",
+  "render_readme": true,
+  "iot_class": "Local Polling",
+  "homeassistant": "2023.11.0"
+}
