@@ -43,7 +43,13 @@ async def async_setup_entry(
     # Fetch initial data so we have data when entities subscribe
     await coordinator.async_config_entry_first_refresh()
     
-    async_add_entities([PipePlayMediaPlayer(coordinator, name)], True)
+    # Create the media player entity
+    entity = PipePlayMediaPlayer(coordinator, name)
+    
+    # Add the entity
+    async_add_entities([entity], True)
+    
+    _LOGGER.info(f"PipePlay media player entity added: {entity.unique_id}")
 
 
 class PipePlayUpdateCoordinator(DataUpdateCoordinator):
@@ -295,15 +301,24 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def _send_command(self, command: str, data: Optional[Dict[str, Any]] = None) -> None:
         """Send command to PipePlay service."""
-        session = async_get_clientsession(self.hass)
-        url = f"{self.coordinator.base_url}/command"
-        headers = self.coordinator._get_headers()
-        
-        payload = {"command": command}
-        if data:
-            payload.update(data)
-        
         try:
+            # Use coordinator's hass instance if entity's hass is not available yet
+            hass_instance = self.hass if self.hass is not None else self.coordinator.hass
+            
+            if hass_instance is None:
+                _LOGGER.error("No hass instance available for command %s", command)
+                return
+                
+            session = async_get_clientsession(hass_instance)
+            url = f"{self.coordinator.base_url}/command"
+            headers = self.coordinator._get_headers()
+            
+            payload = {"command": command}
+            if data:
+                payload.update(data)
+            
+            _LOGGER.debug("Sending command %s to %s", command, url)
+            
             async with asyncio.timeout(10):
                 async with session.post(url, json=payload, headers=headers) as response:
                     if response.status == 401:
@@ -311,6 +326,7 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                     elif response.status != 200:
                         _LOGGER.error("Failed to send command %s: %s", command, response.status)
                     else:
+                        _LOGGER.debug("Command %s sent successfully", command)
                         # Trigger immediate update
                         await self.coordinator.async_request_refresh()
         except Exception as err:
