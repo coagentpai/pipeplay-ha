@@ -10,7 +10,12 @@ from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
     MediaType,
+    BrowseMedia,
 )
+from homeassistant.components.media_player.browse_media import (
+    async_process_play_media_url,
+)
+from homeassistant.components import media_source
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME
 from homeassistant.core import HomeAssistant
@@ -122,16 +127,10 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.SEEK
             | MediaPlayerEntityFeature.PLAY_MEDIA
-            | MediaPlayerEntityFeature.PREVIOUS_TRACK
-            | MediaPlayerEntityFeature.NEXT_TRACK
             | MediaPlayerEntityFeature.TURN_ON
             | MediaPlayerEntityFeature.TURN_OFF
             | MediaPlayerEntityFeature.VOLUME_STEP
-            | MediaPlayerEntityFeature.CLEAR_PLAYLIST
-            | MediaPlayerEntityFeature.SHUFFLE_SET
             | MediaPlayerEntityFeature.BROWSE_MEDIA
-            | MediaPlayerEntityFeature.REPEAT_SET
-            | MediaPlayerEntityFeature.GROUPING
         )
 
     @property
@@ -244,13 +243,6 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Send seek command."""
         await self._send_command("seek", {"position": position})
 
-    async def async_media_previous_track(self) -> None:
-        """Send previous track command."""
-        await self._send_command("previous")
-
-    async def async_media_next_track(self) -> None:
-        """Send next track command."""
-        await self._send_command("next")
 
     async def async_turn_on(self) -> None:
         """Turn the media player on."""
@@ -268,36 +260,19 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Volume down the media player."""
         await self._send_command("volume_down")
 
-    async def async_clear_playlist(self) -> None:
-        """Clear players playlist."""
-        await self._send_command("clear_playlist")
 
-    async def async_set_shuffle(self, shuffle: bool) -> None:
-        """Enable/disable shuffle mode."""
-        await self._send_command("shuffle", {"enabled": shuffle})
-
-    async def async_set_repeat(self, repeat: str) -> None:
-        """Set repeat mode."""
-        await self._send_command("repeat", {"mode": repeat})
 
     async def async_browse_media(self, media_content_type: str = None, media_content_id: str = None):
         """Implement the websocket media browsing helper."""
-        return None  # Placeholder - can be implemented later
+        # Use coordinator's hass instance if entity's hass is not available yet
+        hass_instance = self.hass if self.hass is not None else self.coordinator.hass
+        
+        # Browse Home Assistant's media sources
+        return await media_source.async_browse_media(
+            hass_instance, media_content_id, content_filter=lambda item: True
+        )
 
-    @property 
-    def shuffle(self) -> bool:
-        """Boolean if shuffle is enabled."""
-        return self.coordinator.data.get("shuffle", False)
 
-    @property
-    def repeat(self) -> str:
-        """Return current repeat mode."""
-        return self.coordinator.data.get("repeat", "off")
-
-    @property
-    def group_members(self) -> list:
-        """Return the list of group members."""
-        return []
 
     async def _send_command(self, command: str, data: Optional[Dict[str, Any]] = None) -> None:
         """Send command to PipePlay service."""
