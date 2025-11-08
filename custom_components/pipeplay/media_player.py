@@ -97,6 +97,16 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         self._name = name
         self._attr_unique_id = f"pipeplay_{coordinator.host}_{coordinator.port}"
         self._attr_device_class = "speaker"
+        self._attr_should_poll = False  # We use coordinator for updates
+        
+        # Set device info for proper device registry
+        self._attr_device_info = {
+            "identifiers": {("pipeplay", f"{coordinator.host}_{coordinator.port}")},
+            "name": f"PipePlay {coordinator.host}",
+            "manufacturer": "PipePlay",
+            "model": "PipeWire Media Player",
+            "sw_version": "0.1.0",
+        }
         
         self._attr_supported_features = (
             MediaPlayerEntityFeature.PLAY
@@ -114,6 +124,11 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         return self._name
 
     @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.last_update_success
+
+    @property
     def state(self) -> str:
         """Return the current state of the media player."""
         if not self.coordinator.last_update_success:
@@ -129,6 +144,16 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         }
         
         return state_mapping.get(state, MediaPlayerState.IDLE)
+
+    @property
+    def icon(self) -> str:
+        """Return the icon for the media player."""
+        if self.state == MediaPlayerState.PLAYING:
+            return "mdi:speaker-play"
+        elif self.state == MediaPlayerState.PAUSED:
+            return "mdi:speaker-pause"
+        else:
+            return "mdi:speaker"
 
     @property
     def volume_level(self) -> Optional[float]:
