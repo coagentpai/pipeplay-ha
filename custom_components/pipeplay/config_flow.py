@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME
+
+CONF_API_KEY = "api_key"
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -19,6 +21,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
     vol.Required(CONF_HOST, default="localhost"): str,
     vol.Required(CONF_PORT, default=8080): int,
     vol.Optional(CONF_NAME, default="PipePlay Player"): str,
+    vol.Optional(CONF_API_KEY, default=""): str,
 })
 
 
@@ -37,9 +40,12 @@ class PipePlayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                await self._test_connection(user_input[CONF_HOST], user_input[CONF_PORT])
+                api_key = user_input.get(CONF_API_KEY) or None
+                await self._test_connection(user_input[CONF_HOST], user_input[CONF_PORT], api_key)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
@@ -103,16 +109,43 @@ class PipePlayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def _test_connection(self, host: str, port: int) -> bool:
+    async def _test_connection(self, host: str, port: int, api_key: Optional[str] = None) -> bool:
         """Test if we can connect to the PipePlay service."""
         session = async_get_clientsession(self.hass)
         
+        # First check if authentication is required
         try:
             async with asyncio.timeout(10):
-                async with session.get(f"http://{host}:{port}/api/status") as response:
+                async with session.get(f"http://{host}:{port}/api/auth/info") as response:
+                    if response.status == 200:
+                        auth_info = await response.json()
+                        auth_required = auth_info.get("auth_required", False)
+                    else:
+                        auth_required = False
+        except Exception:
+            auth_required = False
+        
+        # Prepare headers
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        
+        # Test actual connection
+        try:
+            async with asyncio.timeout(10):
+                async with session.get(f"http://{host}:{port}/api/status", headers=headers) as response:
                     if response.status == 200:
                         data = await response.json()
                         return data.get("service") == "pipeplay"
+                    elif response.status == 401:
+                        if auth_required and not api_key:
+                            raise InvalidAuth("API key required but not provided")
+                        elif api_key:
+                            raise InvalidAuth("Invalid API key")
+                        else:
+                            raise CannotConnect("Authentication failed")
+        except InvalidAuth:
+            raise
         except Exception as err:
             _LOGGER.debug("Connection test failed: %s", err)
             raise CannotConnect from err
@@ -122,3 +155,7 @@ class PipePlayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class CannotConnect(Exception):
     """Error to indicate we cannot connect."""
+
+
+class InvalidAuth(Exception):
+    """Error to indicate authentication failure."""

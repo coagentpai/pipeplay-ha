@@ -36,8 +36,9 @@ async def async_setup_entry(
     host = config_entry.data[CONF_HOST]
     port = config_entry.data[CONF_PORT]
     name = config_entry.data[CONF_NAME]
+    api_key = config_entry.data.get("api_key")
     
-    coordinator = PipePlayUpdateCoordinator(hass, host, port)
+    coordinator = PipePlayUpdateCoordinator(hass, host, port, api_key)
     
     # Fetch initial data so we have data when entities subscribe
     await coordinator.async_config_entry_first_refresh()
@@ -48,10 +49,11 @@ async def async_setup_entry(
 class PipePlayUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching PipePlay data."""
 
-    def __init__(self, hass: HomeAssistant, host: str, port: int) -> None:
+    def __init__(self, hass: HomeAssistant, host: str, port: int, api_key: Optional[str] = None) -> None:
         """Initialize the coordinator."""
         self.host = host
         self.port = port
+        self.api_key = api_key
         self.base_url = f"http://{host}:{port}/api"
         
         super().__init__(
@@ -61,15 +63,25 @@ class PipePlayUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=SCAN_INTERVAL),
         )
 
+    def _get_headers(self) -> Dict[str, str]:
+        """Get headers for API requests."""
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from PipePlay API."""
         session = async_get_clientsession(self.hass)
+        headers = self._get_headers()
         
         try:
             async with asyncio.timeout(10):
-                async with session.get(f"{self.base_url}/status") as response:
+                async with session.get(f"{self.base_url}/status", headers=headers) as response:
                     if response.status == 200:
                         return await response.json()
+                    elif response.status == 401:
+                        raise UpdateFailed("Authentication failed - check API key")
                     else:
                         raise UpdateFailed(f"Error fetching data: {response.status}")
         except Exception as err:
@@ -195,6 +207,7 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Send command to PipePlay service."""
         session = async_get_clientsession(self.hass)
         url = f"{self.coordinator.base_url}/command"
+        headers = self.coordinator._get_headers()
         
         payload = {"command": command}
         if data:
@@ -202,8 +215,10 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         
         try:
             async with asyncio.timeout(10):
-                async with session.post(url, json=payload) as response:
-                    if response.status != 200:
+                async with session.post(url, json=payload, headers=headers) as response:
+                    if response.status == 401:
+                        _LOGGER.error("Authentication failed for command %s - check API key", command)
+                    elif response.status != 200:
                         _LOGGER.error("Failed to send command %s: %s", command, response.status)
                     else:
                         # Trigger immediate update

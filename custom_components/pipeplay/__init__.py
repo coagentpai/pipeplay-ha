@@ -24,6 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "host": entry.data["host"],
         "port": entry.data["port"],
         "name": entry.data.get("name", "PipePlay Player"),
+        "api_key": entry.data.get("api_key"),
     }
     
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

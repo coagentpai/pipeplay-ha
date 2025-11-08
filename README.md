@@ -80,6 +80,7 @@ If automatic discovery doesn't work:
    - **Host**: IP address of your PipePlay service (e.g., `192.168.1.100`)
    - **Port**: API port (default: `8080`)
    - **Name**: Friendly name for the player
+   - **API Key**: Required if authentication is enabled (leave empty if not using auth)
 
 ## Usage
 
@@ -126,6 +127,16 @@ data:
 3. Check PipePlay logs for any errors
 4. Ensure PipeWire/PulseAudio is running on the PipePlay host
 
+### Authentication Issues
+
+1. **"Authentication failed - check your API key"**: 
+   - Verify the API key is correct in the integration configuration
+   - Check if authentication is enabled on the PipePlay service
+   - Look for the generated API key in PipePlay logs or config file
+2. **Connection works without API key but fails with key**:
+   - Authentication may be disabled on the PipePlay service
+   - Remove the API key from the integration config if auth is not needed
+
 ### State Not Updating
 
 1. Check network connectivity between Home Assistant and PipePlay
@@ -141,7 +152,12 @@ The integration communicates with PipePlay via HTTP API:
 - `GET /api/status` - Current player status
 - `POST /api/command` - Send control commands
 - `GET /api/info` - Service information
+- `GET /api/auth/info` - Authentication requirements
 - `GET /health` - Health check
+
+#### Authentication
+
+When authentication is enabled on the PipePlay service, all API requests (except `/health` and `/api/auth/info`) require an `Authorization: Bearer <api_key>` header. The integration automatically handles this when an API key is configured.
 
 ### Contributing
 
