@@ -3,6 +3,8 @@ import asyncio
 import logging
 from datetime import timedelta
 from typing import Any, Dict, Optional
+import time
+import json
 
 import aiohttp
 from homeassistant.components.media_player import (
@@ -30,7 +32,7 @@ from homeassistant.helpers.update_coordinator import (
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_INTERVAL = timedelta(seconds=5)
+SCAN_INTERVAL = timedelta(seconds=2)
 
 
 async def async_setup_entry(
@@ -67,13 +69,18 @@ class PipePlayUpdateCoordinator(DataUpdateCoordinator):
         self.port = port
         self.api_key = api_key
         self.base_url = f"http://{host}:{port}/api"
+        self._sse_task = None
+        self._sse_connected = False
         
         super().__init__(
             hass,
             _LOGGER,
             name="pipeplay",
-            update_interval=SCAN_INTERVAL,
+            update_interval=SCAN_INTERVAL,  # Fallback polling interval
         )
+        
+        # Start SSE connection
+        self._start_sse_connection()
 
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests."""
@@ -91,13 +98,71 @@ class PipePlayUpdateCoordinator(DataUpdateCoordinator):
             async with asyncio.timeout(10):
                 async with session.get(f"{self.base_url}/status", headers=headers) as response:
                     if response.status == 200:
-                        return await response.json()
+                        data = await response.json()
+                        # Log position updates for debugging
+                        if data.get("state") == "playing":
+                            _LOGGER.debug("Position update: %s seconds", data.get("media_position"))
+                        return data
                     elif response.status == 401:
                         raise UpdateFailed("Authentication failed - check API key")
                     else:
                         raise UpdateFailed(f"Error fetching data: {response.status}")
         except Exception as err:
             raise UpdateFailed(f"Error communicating with PipePlay: {err}")
+
+    def _start_sse_connection(self):
+        """Start SSE connection in background."""
+        if self._sse_task is None or self._sse_task.done():
+            self._sse_task = asyncio.create_task(self._sse_listener())
+
+    async def _sse_listener(self):
+        """Listen to SSE events for real-time updates."""
+        session = async_get_clientsession(self.hass)
+        headers = self._get_headers()
+        
+        while True:
+            try:
+                url = f"{self.base_url}/events"
+                _LOGGER.debug("Connecting to SSE endpoint: %s", url)
+                
+                async with session.get(url, headers=headers) as response:
+                    if response.status == 200:
+                        self._sse_connected = True
+                        _LOGGER.info("Connected to PipePlay SSE stream")
+                        
+                        async for line in response.content:
+                            line_str = line.decode('utf-8').strip()
+                            if line_str.startswith('data: '):
+                                try:
+                                    data_str = line_str[6:]  # Remove 'data: ' prefix
+                                    data = json.loads(data_str)
+                                    
+                                    # Update coordinator data and notify listeners
+                                    self.async_set_updated_data(data)
+                                    _LOGGER.debug("Received SSE update: %s", data.get("state"))
+                                    
+                                except json.JSONDecodeError as e:
+                                    _LOGGER.debug("Failed to parse SSE data: %s", e)
+                                except Exception as e:
+                                    _LOGGER.debug("Error processing SSE data: %s", e)
+                    else:
+                        _LOGGER.warning("SSE connection failed with status %s", response.status)
+                        
+            except Exception as e:
+                self._sse_connected = False
+                _LOGGER.debug("SSE connection error: %s", e)
+                
+            # Reconnect after delay
+            await asyncio.sleep(5)
+
+    async def async_shutdown(self):
+        """Shutdown the coordinator."""
+        if self._sse_task:
+            self._sse_task.cancel()
+            try:
+                await self._sse_task
+            except asyncio.CancelledError:
+                pass
 
 
 class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
@@ -212,6 +277,12 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
         """Return the position of current playing media in seconds."""
         position = self.coordinator.data.get("media_position")
         return int(position) if position else None
+
+    @property
+    def media_position_updated_at(self):
+        """Return when the position was last updated."""
+        # Use the last coordinator update time as position update time
+        return self.coordinator.last_update_success_time
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs) -> None:
         """Play media from a URL or file path."""
