@@ -226,25 +226,30 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 _LOGGER.info("Attempting to resolve media-source URL: %s", media_id)
                 
                 if hass_instance is not None:
-                    # Resolve the media source URL to a playable URL
-                    resolved_url = async_process_play_media_url(hass_instance, media_id)
-                    _LOGGER.info("URL resolution result: %s", resolved_url)
-                    
-                    if resolved_url and resolved_url != media_id:
-                        media_id = resolved_url
-                        _LOGGER.info("Successfully resolved media-source URL from %s to: %s", original_media_id, media_id)
-                    else:
-                        _LOGGER.warning("Failed to resolve media-source URL or got same URL back: %s", media_id)
-                        # Try alternative approach - construct proxy URL manually
+                    # Use the same pattern as MPD integration
+                    try:
+                        # Step 1: Resolve the media source to get a play item
+                        play_item = await async_resolve_media(hass_instance, media_id, self.entity_id)
+                        _LOGGER.info("Resolved media item: %s", play_item)
+                        
+                        if play_item and hasattr(play_item, 'url'):
+                            # Step 2: Process the play item URL to make it accessible
+                            media_id = async_process_play_media_url(hass_instance, play_item.url)
+                            _LOGGER.info("Successfully resolved media-source URL from %s to: %s", original_media_id, media_id)
+                        else:
+                            _LOGGER.warning("Failed to resolve media-source URL: %s", media_id)
+                    except Exception as resolve_e:
+                        _LOGGER.error("Error in two-step resolution for %s: %s", media_id, resolve_e)
+                        # Fallback to direct resolution
                         try:
-                            resolved_media = await async_resolve_media(hass_instance, media_id, None)
-                            if resolved_media and hasattr(resolved_media, 'url'):
-                                media_id = resolved_media.url
-                                _LOGGER.info("Alternative resolution succeeded: %s", media_id)
+                            resolved_url = async_process_play_media_url(hass_instance, media_id)
+                            if resolved_url and resolved_url != media_id:
+                                media_id = resolved_url
+                                _LOGGER.info("Fallback resolution succeeded: %s", media_id)
                             else:
-                                _LOGGER.warning("Alternative resolution also failed")
-                        except Exception as alt_e:
-                            _LOGGER.error("Alternative resolution error: %s", alt_e)
+                                _LOGGER.warning("All resolution methods failed for: %s", media_id)
+                        except Exception as fallback_e:
+                            _LOGGER.error("Fallback resolution also failed: %s", fallback_e)
                 else:
                     _LOGGER.error("No hass instance available to resolve media-source URL")
             except Exception as e:
