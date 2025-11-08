@@ -116,6 +116,16 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.VOLUME_MUTE
             | MediaPlayerEntityFeature.SEEK
             | MediaPlayerEntityFeature.PLAY_MEDIA
+            | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.NEXT_TRACK
+            | MediaPlayerEntityFeature.TURN_ON
+            | MediaPlayerEntityFeature.TURN_OFF
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.CLEAR_PLAYLIST
+            | MediaPlayerEntityFeature.SHUFFLE_SET
+            | MediaPlayerEntityFeature.BROWSE_MEDIA
+            | MediaPlayerEntityFeature.REPEAT_SET
+            | MediaPlayerEntityFeature.GROUPING
         )
 
     @property
@@ -227,6 +237,61 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     async def async_media_seek(self, position: float) -> None:
         """Send seek command."""
         await self._send_command("seek", {"position": position})
+
+    async def async_media_previous_track(self) -> None:
+        """Send previous track command."""
+        await self._send_command("previous")
+
+    async def async_media_next_track(self) -> None:
+        """Send next track command."""
+        await self._send_command("next")
+
+    async def async_turn_on(self) -> None:
+        """Turn the media player on."""
+        await self._send_command("turn_on")
+
+    async def async_turn_off(self) -> None:
+        """Turn the media player off."""
+        await self._send_command("turn_off")
+
+    async def async_volume_up(self) -> None:
+        """Volume up the media player."""
+        await self._send_command("volume_up")
+
+    async def async_volume_down(self) -> None:
+        """Volume down the media player."""
+        await self._send_command("volume_down")
+
+    async def async_clear_playlist(self) -> None:
+        """Clear players playlist."""
+        await self._send_command("clear_playlist")
+
+    async def async_set_shuffle(self, shuffle: bool) -> None:
+        """Enable/disable shuffle mode."""
+        await self._send_command("shuffle", {"enabled": shuffle})
+
+    async def async_set_repeat(self, repeat: str) -> None:
+        """Set repeat mode."""
+        await self._send_command("repeat", {"mode": repeat})
+
+    async def async_browse_media(self, media_content_type: str = None, media_content_id: str = None):
+        """Implement the websocket media browsing helper."""
+        return None  # Placeholder - can be implemented later
+
+    @property 
+    def shuffle(self) -> bool:
+        """Boolean if shuffle is enabled."""
+        return self.coordinator.data.get("shuffle", False)
+
+    @property
+    def repeat(self) -> str:
+        """Return current repeat mode."""
+        return self.coordinator.data.get("repeat", "off")
+
+    @property
+    def group_members(self) -> list:
+        """Return the list of group members."""
+        return []
 
     async def _send_command(self, command: str, data: Optional[Dict[str, Any]] = None) -> None:
         """Send command to PipePlay service."""
