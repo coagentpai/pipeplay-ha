@@ -15,6 +15,7 @@ from homeassistant.components.media_player import (
 from homeassistant.components.media_player.browse_media import (
     async_process_play_media_url,
 )
+from homeassistant.components.media_source import async_resolve_media
 from homeassistant.components import media_source
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_NAME
@@ -214,24 +215,42 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs) -> None:
         """Play media from a URL or file path."""
+        original_media_id = media_id
+        
         # Resolve media-source URLs to actual playable URLs
         if media_id and media_id.startswith("media-source://"):
             try:
                 # Use coordinator's hass instance if entity's hass is not available yet
                 hass_instance = self.hass if self.hass is not None else self.coordinator.hass
                 
+                _LOGGER.info("Attempting to resolve media-source URL: %s", media_id)
+                
                 if hass_instance is not None:
                     # Resolve the media source URL to a playable URL
                     resolved_url = await async_process_play_media_url(hass_instance, media_id)
-                    if resolved_url:
+                    _LOGGER.info("URL resolution result: %s", resolved_url)
+                    
+                    if resolved_url and resolved_url != media_id:
                         media_id = resolved_url
-                        _LOGGER.debug("Resolved media-source URL to: %s", media_id)
+                        _LOGGER.info("Successfully resolved media-source URL from %s to: %s", original_media_id, media_id)
                     else:
-                        _LOGGER.warning("Failed to resolve media-source URL: %s", media_id)
+                        _LOGGER.warning("Failed to resolve media-source URL or got same URL back: %s", media_id)
+                        # Try alternative approach - construct proxy URL manually
+                        try:
+                            resolved_media = await async_resolve_media(hass_instance, media_id, None)
+                            if resolved_media and hasattr(resolved_media, 'url'):
+                                media_id = resolved_media.url
+                                _LOGGER.info("Alternative resolution succeeded: %s", media_id)
+                            else:
+                                _LOGGER.warning("Alternative resolution also failed")
+                        except Exception as alt_e:
+                            _LOGGER.error("Alternative resolution error: %s", alt_e)
                 else:
                     _LOGGER.error("No hass instance available to resolve media-source URL")
             except Exception as e:
                 _LOGGER.error("Error resolving media-source URL %s: %s", media_id, e)
+                import traceback
+                _LOGGER.error("Traceback: %s", traceback.format_exc())
         
         await self._send_command("play_media", {
             "media_type": media_type,
