@@ -24,7 +24,7 @@ from homeassistant.helpers.update_coordinator import (
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_INTERVAL = 5  # seconds
+SCAN_INTERVAL = timedelta(seconds=5)
 
 
 async def async_setup_entry(
@@ -60,7 +60,7 @@ class PipePlayUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name="pipeplay",
-            update_interval=timedelta(seconds=SCAN_INTERVAL),
+            update_interval=SCAN_INTERVAL,
         )
 
     def _get_headers(self) -> Dict[str, str]:
