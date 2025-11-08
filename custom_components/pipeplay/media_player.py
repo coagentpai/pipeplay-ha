@@ -282,7 +282,7 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
     def media_position_updated_at(self):
         """Return when the position was last updated."""
         # Use the last coordinator update time as position update time
-        return self.coordinator.last_update_success_time
+        return self.coordinator.last_update_success
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs) -> None:
         """Play media from a URL or file path."""
