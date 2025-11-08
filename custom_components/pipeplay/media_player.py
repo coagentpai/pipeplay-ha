@@ -227,7 +227,7 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
                 
                 if hass_instance is not None:
                     # Resolve the media source URL to a playable URL
-                    resolved_url = await async_process_play_media_url(hass_instance, media_id)
+                    resolved_url = async_process_play_media_url(hass_instance, media_id)
                     _LOGGER.info("URL resolution result: %s", resolved_url)
                     
                     if resolved_url and resolved_url != media_id:
