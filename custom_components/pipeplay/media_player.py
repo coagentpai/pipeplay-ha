@@ -214,6 +214,25 @@ class PipePlayMediaPlayer(CoordinatorEntity, MediaPlayerEntity):
 
     async def async_play_media(self, media_type: str, media_id: str, **kwargs) -> None:
         """Play media from a URL or file path."""
+        # Resolve media-source URLs to actual playable URLs
+        if media_id and media_id.startswith("media-source://"):
+            try:
+                # Use coordinator's hass instance if entity's hass is not available yet
+                hass_instance = self.hass if self.hass is not None else self.coordinator.hass
+                
+                if hass_instance is not None:
+                    # Resolve the media source URL to a playable URL
+                    resolved_url = await async_process_play_media_url(hass_instance, media_id)
+                    if resolved_url:
+                        media_id = resolved_url
+                        _LOGGER.debug("Resolved media-source URL to: %s", media_id)
+                    else:
+                        _LOGGER.warning("Failed to resolve media-source URL: %s", media_id)
+                else:
+                    _LOGGER.error("No hass instance available to resolve media-source URL")
+            except Exception as e:
+                _LOGGER.error("Error resolving media-source URL %s: %s", media_id, e)
+        
         await self._send_command("play_media", {
             "media_type": media_type,
             "media_id": media_id
